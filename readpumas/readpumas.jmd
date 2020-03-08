@@ -1,0 +1,490 @@
+---
+title: Expected errors for the read_pumas function
+author: Vijay Ivaturi
+---
+
+```julia
+using Pumas
+using Query
+using Plots
+```
+
+## Introduction
+
+Analysis datasets for non-linear mixed effects models (NLME) come in various flavors. The Pumas.jl package in JuliaPro has a `read_pumas` function
+that is designed to perform a sanity check and ensure that the data is ready for analysis. This function has many heuristics and it may be difficult to
+catch all errors with useful messages. This document aims to build a running repository of possible mistakes that could be used by the development team
+to work on providing useful error messages, and/or include in the FAQ section of Pumas documentation.
+
+We will test multiple scenarios by creating dummy datasets using DataFrames.jl that will allow this document to be reproducible.
+
+For some scenarios, we may need a model
+
+```julia
+pomodel = @model begin
+    @param   begin
+        tvka ∈ RealDomain(lower=0)
+        tvcl ∈ RealDomain(lower=0)
+        tvvc ∈ RealDomain(lower=0)
+        Ω ∈ PDiagDomain(3)
+        σ_prop ∈ RealDomain(lower=0)
+    end
+
+    @random begin
+      η ~ MvNormal(Ω)
+    end
+
+    @pre begin
+        CL = tvcl * exp(η[1])
+        Vc  = tvvc*exp(η[2])
+        Ka = tvka * exp(η[3])
+    end
+
+
+     @dynamics begin
+         Depot' = -Ka*Depot
+         Central' =  Ka*Depot - (CL/Vc)*Central
+     end
+
+    @derived begin
+        cp = @. 1000*(Central/Vc)
+        dv ~ @. Normal(cp, sqrt(cp^2*σ_prop))
+    end
+end
+
+par = (tvka = 1,
+                tvcl = 4.0,
+                tvvc = 70.0,
+                Ω = Diagonal([0.09,0.09,0.09]),
+                σ_prop = 0.04)
+```
+
+## Scenarios
+
+1. Scenario-1 - standard dataframe with no errors
+
+```julia
+df1 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,0,0,0,0,10,0,0,0,0],
+                cmt=[1,2,2,2,2,1,2,2,2,2],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,85,75,72,70,110,110,110,110,110])
+display(df1)
+```
+
+```julia
+df1_r = read_pumas(df1, cvs=[:age,:sex,:crcl])
+```
+2. Scenario-2 - observations (dv) at time of dose
+
+```julia
+df2 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,0,0,0,0,10,0,0,0,0],
+                cmt=[1,2,2,2,2,1,2,2,2,2],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[10,8,6,4,2,10,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,85,75,72,70,110,110,110,110,110])
+display(df2)
+```
+
+```julia
+df2_r = read_pumas(df2, cvs=[:age,:sex,:crcl])
+```
+
+In this case, the observations at the time of dosing events are being set to `missing`. We can see this here
+
+```julia
+df2_r[1].observations
+```
+
+The user should get a message after calling the `read_pumas` function that
+
+__Observations were present at time of dose in some subejcts and these
+will be set to `missing` and are ignored. It is recommended in Pumas to have a blank record at the time of time of dosing__
+
+3. Scenario-3 - `amt` has `missing` at time of observations (evid=0)
+
+```julia
+df3 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                cmt=[1,2,2,2,2,1,2,2,2,2],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,85,75,72,70,110,110,110,110,110])
+display(df3)
+```
+
+```julia
+df3_r = read_pumas(df3, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+TODO: I thought this turned a error
+
+4. Scenario-4 - string observations
+
+```julia
+df4 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                cmt=[1,2,2,2,2,1,2,2,2,2],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,"<LOQ",missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,85,75,72,70,110,110,110,110,110])
+display(df4)
+```
+
+```julia
+df4_r = read_pumas(df4, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this case, the observations have a string element. Due to this, the column type of `dv` changes from `Float64` to `Any`.
+The error should be informative and identify the column and the unique string(s) that are showing up in the column. The confusion arises
+even more because the we allow string based covariates, so the user will not know what to expect
+
+The user should get a message after calling the `read_pumas` function that
+
+__xxx column variable in your dataset has the following unique string(s) <print the strings>. We expect the xxx column to be of numeric type.
+Please fix your input data before proceeding further__
+
+In this example __xxx__ is `:dv`
+
+5. Scenario-5 - No event identifier (evid)
+
+```julia
+df5 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                cmt=[1,2,2,2,2,1,2,2,2,2],
+                #evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,85,75,72,70,110,110,110,110,110])
+display(df5)
+```
+
+```julia
+df5_r = read_pumas(df5, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+`read_pumas` silently accepts and generate a population with no events when `evid` is absent in the dataset. A non-event `Population` can
+be created by triggering the boolean `event_data` in read_pumas function. But in this case, lack of `evid` seems to be creating an empty
+vector of events. We should inform the user as follows
+
+__Your dataset has no events (doses) as you have not specified the `evid` column. If your intent is to have a `Population` with no events,
+then you can use the argument `event_data=false` in your `read_pumas` function.__
+
+6. Scenario-6 - `cmt` must be positive
+
+```julia
+df6 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                cmt=[-1,2,2,2,2,-1,2,2,2,2],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,85,75,72,70,110,110,110,110,110])
+display(df6)
+```
+
+```julia
+df6_r = read_pumas(df6, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+`read_pumas` currently accept negative values for `cmt`. Historically, this was allowed in NONMEM, but we don't use that in Pumas.
+We should throw an assertion error saying that __`cmt` should be >0__
+
+7. Scenario-7 - `cmt`can be a string
+
+```julia
+df7 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,85,75,72,70,110,110,110,110,110])
+display(df7)
+```
+
+```julia
+df7_r = read_pumas(df7, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+8. Scenario-8 - `amt`cannot be a string
+
+```julia
+df8 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=["10","","","","","10","","","",""],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,85,75,72,70,110,110,110,110,110])
+display(df8)
+```
+
+```julia
+df8_r = read_pumas(df8, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+We should provide a better error message where we detect which column is leading to the method error. In this example, I gave `amt` as
+a string column, but we need to ensure that the any key columns that are required internally on which `AbstractFloat` or some other numeric method
+is called are checked properly.
+
+In this case, the error message should come out as:
+
+__xxx has/have been provided as a string column(s) where Pumas requires this/these to be a numeric column(s). Please check your input dataset__
+
+9. Scenario-9 - missing covariates
+
+```julia
+df9 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M",missing,"M","M","M","F","F","F","F","F"],
+                crcl =[90,missing,75,72,70,110,110,110,110,110])
+display(df9)
+```
+
+```julia
+df9_r = read_pumas(df9, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this scenario, `sex` and `crcl` have missing covariates. I think we should inform the user
+early on that their covariates have missing information, especially when it is
+not continous.
+__Covariates `sex` and `crcl` have `missing` covariates. ....__
+
+TODO: Not sure what else to tell the user
+
+10. Scenario-10 - `addl` without `ii` should not be allowed in `read_pumas`
+
+```julia
+df10 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                addl = [5,0,0,0,0,5,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df10)
+```
+
+```julia
+df10_r = read_pumas(df10, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this example, `addl` of 5 indicates 5 additional doses, but there is no `ii` variable.
+This should technically throw an error as `read_pumas` should check for the presence of a
+positive `ii` when `addl>0`. Below when we plot, we see that all 6 doses
+go into the `Depot` compartment at `time=0`. This is WRONG. We should not allow
+
+```julia
+obs10 = simobs(pomodel, df10_r, par,obstimes=0:1:96)
+plot(obs10, obsnames=[:cp])
+```
+To contrast, look at what `DosageRegimen` throws when
+we provide `addl` without and `ii`
+
+```julia
+ev10 = DosageRegimen(100, addl=5)
+```
+
+11. Scenario-11 - `addl` with non-positive `ii` should not be allowed in `read_pumas`
+
+```julia
+df11 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                addl = [5,0,0,0,0,5,0,0,0,0],
+                ii = [0,0,0,0,0,0,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df11)
+```
+
+```julia
+df11_r = read_pumas(df11, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this example, `addl` of 5 indicates 5 additional doses, and the corresponding `ii` variable is non-positive.
+This should technically throw an error as `read_pumas` should check for the presence of a
+positive `ii` when `addl>0`. Below when we plot, we see that all 6 doses
+go into the `Depot` compartment at `time=0`. This is WRONG. We should not allow
+
+```julia
+obs11 = simobs(pomodel, df11_r, par,obstimes=0:1:96)
+plot(obs11, obsnames=[:cp])
+```
+To contrast, look at what `DosageRegimen` throws when
+we provide `addl` and a non-positive `ii`
+
+```julia
+ev11 = DosageRegimen(100, addl=5, ii=0)
+```
+
+12. Scenario-12 - `addl` with positive `ii` WORKS correctly in `read_pumas`
+
+```julia
+df12 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                addl = [5,0,0,0,0,5,0,0,0,0],
+                ii = [12,0,0,0,0,12,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df12)
+```
+
+```julia
+df12_r = read_pumas(df12, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+```julia
+obs12 = simobs(pomodel, df12_r, par,obstimes=0:1:96)
+plot(obs12, obsnames=[:cp])
+```
+
+13. Scenario-13 - `addl` cannot be zero with a positive `ii`
+
+```julia
+df13 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                addl = [0,0,0,0,0,0,0,0,0,0],
+                ii = [12,0,0,0,0,12,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df13)
+```
+
+```julia
+df13_r = read_pumas(df13, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this example `addl` is allowed to zero when `ii` is positive. This is incorrect.
+In contrast, look at the `DosageRegimen` below.
+
+```julia
+ev13 = DosageRegimen(100, ii=12, addl=0)
+```
+14. Scenario-14 - `amt` cannot be zero when `evid=1`
+
+```julia
+df14 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[0,missing,missing,missing,missing,0,missing,missing,missing,missing],
+                addl = [5,0,0,0,0,5,0,0,0,0],
+                ii = [12,0,0,0,0,12,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df14)
+```
+
+```julia
+df14_r = read_pumas(df14, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this example `amt` is allowed to zero when `evid=1`. This is incorrect.
+In contrast, look at the `DosageRegimen` below.
+
+```julia
+ev14 = DosageRegimen(0, ii=12, addl=5)
+```
+
+15. Scenario-15 - `evid` cannot be zero when `amt>0` or `addl` and `ii` are positive
+
+```julia
+df15 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                addl = [5,0,0,0,0,5,0,0,0,0],
+                ii = [12,0,0,0,0,12,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[0,0,0,0,0,0,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df15)
+```
+
+```julia
+df15_r = read_pumas(df15, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this example `evid` is allowed to zero when `amt=0`. This is incorrect.
+In contrast, look at the `DosageRegimen` below.
+
+```julia
+ev15 = DosageRegimen(10, evid=0, ii=12, addl=5)
+```
+
+16. Scenario-16 - `evid` cannot be zero when `amt>0` or `addl` and `ii` are positive
+
+```julia
+df16 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                addl = [5,0,0,0,0,5,0,0,0,0],
+                ii = [12,0,0,0,0,12,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df16)
+```
+
+```julia
+df16_r = read_pumas(df16, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this example `evid` is allowed to zero when `amt=0`. This is incorrect.
+In contrast, look at the `DosageRegimen` below.
+
+```julia
+ev16 = DosageRegimen(10, evid=0, ii=12, addl=5)
+```
