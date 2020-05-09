@@ -1,0 +1,423 @@
+---
+title: Expected errors for the read_nca function
+author: Vijay Ivaturi
+---
+
+```julia
+using Pumas
+```
+
+## Introduction
+
+Analysis datasets for NCA come in various flavors. The Pumas.jl package in JuliaPro has a `read_nca` function
+that is designed to perform a sanity check and ensure that the data is ready for analysis. This function has many heuristics and it may be difficult to
+catch all errors with useful messages. This document aims to build a running repository of possible mistakes that could be used by the development team
+to work on providing useful error messages, and/or include in the FAQ section of Pumas documentation.
+
+We will test multiple scenarios by creating dummy datasets using DataFrames.jl that will allow this document to be reproducible.
+
+## Scenarios
+
+1. Scenario-1 - standard dataframe with no errors
+
+```julia
+df1 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,0,0,0,0,10,0,0,0,0],
+                conc=[missing,8,6,4,2,missing,8,6,4,2],
+                route = ["iv","iv","iv","iv","iv","iv","iv","iv","iv","iv"])
+display(df1)
+```
+
+```julia
+df1_r = read_nca(df1)
+```
+
+```julia
+NCAReport(df1_r)
+```
+2. Scenario-2 - same as 1 but no route
+
+```julia
+df2 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,0,0,0,0,10,0,0,0,0],
+                conc=[missing,8,6,4,2,missing,8,6,4,2])
+display(df2)
+```
+
+```julia
+df2_r = read_nca(df2)
+```
+
+we get a useful warning message
+`Warning: No dosage information has passed. If the dataset has dosage information, you can pass the column names by `amt=:AMT, route=:route`.
+└ @ Pumas.NCA ~/.julia/dev/Pumas/src/nca/data_parsing.jl:74`
+
+Suggest to improve the warning to detect if the user has only passed in `amt` and not `route`
+`Warning: Dosage information requires the presence of both `amt` & `route` information.
+ Looks like you only entered the `amt` and not the `route`. If your dataset does not have `route`, please add a column that specifies the route of administration and then pass both columns `amt=:AMT, route=:route`.
+└ @ Pumas.NCA ~/.julia/dev/Pumas/src/nca/data_parsing.jl:74`
+
+```julia
+NCAReport(df2_r)
+```
+Initially a warning is printed but then there is a error message. Can we try and get a more informative error message
+
+```
+┌ Warning: `dose` is not provided. No dependent quantities will be calculated
+└ @ Pumas.NCA ~/.julia/dev/Pumas/src/nca/type.jl:301
+[ Info: ID 1 errored: AUC calculation cannot proceed, because `c0` gives missing
+[ Info: ID 2 errored: AUC calculation cannot proceed, because `c0` gives missing
+ERROR: MethodError: no method matching getindex(::Missing, ::Int64)
+Stacktrace:
+ [1] #_auc#228(::Symbol, ::Symbol, ::Bool, ::Bool, ::Base.Iterators.Pairs{Union{},Union{},Tuple{},NamedTuple{,Tuple{}}}, ::typeof(Pumas.NCA._auc), ::NCASubject{Array{Int64,1},Array{Int64,1},Array{Int64,1},Float64,Float64,Float64,Nothing,Float64,Float64,Float64,Int64,Int64,Int64,Nothing,Nothing,Nothing,Symbol}, ::Nothing, ::typeof(Pumas.NCA.auclinear), ::typeof(Pumas.NCA.auclog), ::typeof(Pumas.NCA.extrapaucinf), ::Type) at /Users/vijay/.julia/dev/Pumas/src/nca/auc.jl:141
+ [2] #_auc at ./array.jl:0 [inlined]
+ [3] #auc_nokwarg#238 at /Users/vijay/.julia/dev/Pumas/src/nca/auc.jl:267 [inlined]
+ [4] #auc_nokwarg at ./none:0 [inlined]
+ [5] #auc#235 at /Users/vijay/.julia/dev/Pumas/src/nca/auc.jl:252 [inlined]
+ [6] #auc at ./none:0 [inlined]
+ [7] #699 at /Users/vijay/.julia/dev/Pumas/src/nca/NCA.jl:42 [inlined]
+ [8] iterate at ./generator.jl:47 [inlined]
+ [9] _collect(::Array{NCASubject{Array{Int64,1},Array{Int64,1},Array{Int64,1},Float64,Float64,Float64,Nothing,Float64,Float64,Float64,Int64,Int64,Int64,Nothing,Nothing,Nothing,Symbol},1}, ::Base.Generator{Array{NCASubject{Array{Int64,1},Array{Int64,1},Array{Int64,1},Float64,Float64,Float64,Nothing,Float64,Float64,Float64,Int64,Int64,Int64,Nothing,Nothing,Nothing,Symbol},1},Pumas.NCA.var"#699#704"{Bool,Base.Iterators.Pairs{Union{},Union{},Tuple{},NamedTuple{,Tuple{}}},Tuple{}}}, ::Base.EltypeUnknown, ::Base.HasShape{1}) at ./array.jl:635
+ [10] collect_similar at ./array.jl:564 [inlined]
+ [11] map at ./abstractarray.jl:2073 [inlined]
+ [12] #auc#697(::Bool, ::Bool, ::Base.Iterators.Pairs{Union{},Union{},Tuple{},NamedTuple{,Tuple{}}}, ::typeof(Pumas.NCA.auc), ::Array{NCASubject{Array{Int64,1},Array{Int64,1},Array{Int64,1},Float64,Float64,Float64,Nothing,Float64,Float64,Float64,Int64,Int64,Int64,Nothing,Nothing,Nothing,Symbol},1}) at /Users/vijay/.julia/dev/Pumas/src/nca/NCA.jl:42
+ [13] #auc at ./none:0 [inlined]
+ [14] (::Pumas.NCA.var"#95#164"{Base.Iterators.Pairs{Union{},Union{},Tuple{},NamedTuple{,Tuple{}}},Array{NCASubject{Array{Int64,1},Array{Int64,1},Array{Int64,1},Float64,Float64,Float64,Nothing,Float64,Float64,Float64,Int64,Int64,Int64,Nothing,Nothing,Nothing,Symbol},1}})(::Tuple{Int64,typeof(Pumas.NCA.auc)}) at ./none:0
+ [15] iterate at ./generator.jl:47 [inlined]
+ [16] collect_to!(::Array{DataFrame,1}, ::Base.Generator{Base.Iterators.Enumerate{Array{Function,1}},Pumas.NCA.var"#95#164"{Base.Iterators.Pairs{Union{},Union{},Tuple{},NamedTuple{,Tuple{}}},Array{NCASubject{Array{Int64,1},Array{Int64,1},Array{Int64,1},Float64,Float64,Float64,Nothing,Float64,Float64,Float64,Int64,Int64,Int64,Nothing,Nothing,Nothing,Symbol},1}}}, ::Int64, ::Tuple{Int64,Int64}) at ./array.jl:667
+ [17] collect_to_with_first!(::Array{DataFrame,1}, ::DataFrame, ::Base.Generator{Base.Iterators.Enumerate{Array{Function,1}},Pumas.NCA.var"#95#164"{Base.Iterators.Pairs{Union{},Union{},Tuple{},NamedTuple{,Tuple{}}},Array{NCASubject{Array{Int64,1},Array{Int64,1},Array{Int64,1},Float64,Float64,Float64,Nothing,Float64,Float64,Float64,Int64,Int64,Int64,Nothing,Nothing,Nothing,Symbol},1}}}, ::Tuple{Int64,Int64}) at ./array.jl:646
+ [18] collect(::Base.Generator{Base.Iterators.Enumerate{Array{Function,1}},Pumas.NCA.var"#95#164"{Base.Iterators.Pairs{Union{},Union{},Tuple{},NamedTuple{,Tuple{}}},Array{NCASubject{Array{Int64,1},Array{Int64,1},Array{Int64,1},Float64,Float64,Float64,Nothing,Float64,Float64,Float64,Int64,Int64,Int64,Nothing,Nothing,Nothing,Symbol},1}}}) at ./array.jl:627
+ [19] #NCAReport#28(::Nothing, ::Nothing, ::Nothing, ::Nothing, ::Base.Iterators.Pairs{Union{},Union{},Tuple{},NamedTuple{,Tuple{}}}, ::typeof(NCAReport), ::Array{NCASubject{Array{Int64,1},Array{Int64,1},Array{Int64,1},Float64,Float64,Float64,Nothing,Float64,Float64,Float64,Int64,Int64,Int64,Nothing,Nothing,Nothing,Symbol},1}) at /Users/vijay/.julia/dev/Pumas/src/nca/type.jl:430
+ [20] NCAReport(::Array{NCASubject{Array{Int64,1},Array{Int64,1},Array{Int64,1},Float64,Float64,Float64,Nothing,Float64,Float64,Float64,Int64,Int64,Int64,Nothing,Nothing,Nothing,Symbol},1}) at /Users/vijay/.julia/dev/Pumas/src/nca/type.jl:301
+ [21] top-level scope at none:0
+```
+
+3. Scenario-3 - `amt` has `missing` at time of observations (evid=0)
+
+```julia
+df3 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                conc=[missing,8,6,4,2,missing,8,6,4,2],
+                route = ["iv","iv","iv","iv","iv","iv","iv","iv","iv","iv"])
+display(df3)
+```
+
+```julia
+df3_r = read_nca(df3)
+```
+
+```julia
+NCAReport(df3_r)
+```
+
+4. Scenario-4 - string observations
+
+```julia
+df4 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                conc=[missing,8,6,4,"<LOQ",missing,8,6,4,2],
+                route = ["iv","iv","iv","iv","iv","iv","iv","iv","iv","iv"])
+display(df4)
+```
+
+```julia
+df4_r = read_nca(df4)
+```
+
+In this case, the observations have a string element. Due to this, the column type of `conc` changes from `Float64` to `Any`.
+The error should be informative and identify the column and the unique string(s) that are showing up in the column. The confusion arises
+even more because the we allow string based groups, so the user will not know what to expect
+
+The user should get a message after calling the `read_nca` function that
+
+__xxx column variable in your dataset has the following unique string(s) <print the strings>. We expect the xxx column to be of numeric type.
+Please fix your input data before proceeding further__
+
+In this example __xxx__ is in `:conc`
+
+5. Scenario-5 - string amounts
+
+```julia
+df5 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=["10",missing,missing,missing,missing,"10",missing,missing,missing,missing],
+                conc=[missing,8,6,4,2,missing,8,6,4,2],
+                route = ["iv","iv","iv","iv","iv","iv","iv","iv","iv","iv"])
+display(df5)
+```
+
+```julia
+df5_r = read_nca(df5)
+```
+In this case, the amount is a string element. Due to this, the column type of `amt` changes from `Float64` to `Any`.
+The error should be informative and identify the column and the unique string(s) that are showing up in the column. The confusion arises
+even more because the we allow string based groups, so the user will not know what to expect
+
+The user should get a message after calling the `read_nca` function that
+
+__xxx column variable in your dataset has the following unique string(s) <print the strings>. We expect the xxx column to be of numeric type.
+Please fix your input data before proceeding further__
+
+In this example __xxx__ is in `:amt`
+
+6. Scenario-6 - concentrations at dosing row are ignored
+
+```julia
+df6 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                conc=[10,8,6,4,2,10,8,6,4,2],
+                route = ["iv","iv","iv","iv","iv","iv","iv","iv","iv","iv"])
+display(df6)
+```
+
+```julia
+df6_r = read_nca(df6)
+```
+
+```julia
+NCAReport(df6_r)
+```
+results are same as `df1_r`
+
+7. Scenario-7 - `route` can either be upper or lowercase `ev`, `iv` or `inf`
+
+```julia
+df7 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                conc=[10,8,6,4,2,10,8,6,4,2],
+                route = ["IV","IV","IV","IV","IV","IV","IV","IV","IV","IV"])
+display(df7)
+```
+
+```julia
+df7_r = read_nca(df7)
+```
+
+```julia
+NCAReport(df7_r)
+```
+
+8. Scenario-8 - non-mononotic time
+
+```julia
+df8 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,3,0,1,2,3,3],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                conc=[10,8,6,4,2,10,8,6,4,2],
+                route = ["iv","iv","iv","iv","iv","iv","iv","iv","iv","iv"])
+
+display(df8)
+```
+
+```julia
+df8_r = read_nca(df8)
+```
+
+It would be nice if we can print out the `id` number and `time` pair that causes this error as it will be more informative
+than printing an index which is difficult to understand in a large dataset.
+
+9. Scenario-9 - missing time
+
+```julia
+df9 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,missing,0,1,2,3,4],
+                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                conc=[10,8,6,4,2,10,8,6,4,2],
+                route = ["iv","iv","iv","iv","iv","iv","iv","iv","iv","iv"])
+display(df9)
+```
+
+```julia
+df9_r = read_nca(df9)
+```
+It would be nice if we can print out the `id` number and `time` pair that causes this error as it will be more informative
+than printing an index which is difficult to understand in a large dataset.
+
+
+10. Scenario-10 - `addl` without `ii` should not be allowed in `read_pumas`
+
+```julia
+df10 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,0,0,0,0,10,0,0,0,0],
+                addl = [5,0,0,0,0,5,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df10)
+```
+
+```julia
+df10_r = read_pumas(df10, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this example, `addl` of 5 indicates 5 additional doses, but there is no `ii` variable.
+This should technically throw an error as `read_pumas` should check for the presence of a
+positive `ii` when `addl>0`. Below when we plot, we see that all 6 doses
+go into the `Depot` compartment at `time=0`. This is WRONG. We should not allow
+
+```julia
+obs10 = simobs(pomodel, df10_r, par,obstimes=0:1:96)
+plot(obs10, obsnames=[:cp])
+```
+To contrast, look at what `DosageRegimen` throws when
+we provide `addl` without and `ii`
+
+```julia
+ev10 = DosageRegimen(100, addl=5)
+```
+
+11. Scenario-11 - `addl` with non-positive `ii` should not be allowed in `read_pumas`
+
+```julia
+df11 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,0,0,0,0,10,0,0,0,0],
+                addl = [5,0,0,0,0,5,0,0,0,0],
+                ii = [0,0,0,0,0,0,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df11)
+```
+
+```julia
+df11_r = read_pumas(df11, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this example, `addl` of 5 indicates 5 additional doses, and the corresponding `ii` variable is non-positive.
+This should technically throw an error as `read_pumas` should check for the presence of a
+positive `ii` when `addl>0`. Below when we plot, we see that all 6 doses
+go into the `Depot` compartment at `time=0`. This is WRONG. We should not allow
+
+```julia
+obs11 = simobs(pomodel, df11_r, par,obstimes=0:1:96)
+plot(obs11, obsnames=[:cp])
+```
+To contrast, look at what `DosageRegimen` throws when
+we provide `addl` and a non-positive `ii`
+
+```julia
+ev11 = DosageRegimen(100, addl=5, ii=0)
+```
+
+12. Scenario-12 - `addl` with positive `ii` WORKS correctly in `read_pumas`
+
+```julia
+df12 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,0,0,0,0,10,0,0,0,0],
+                addl = [5,0,0,0,0,5,0,0,0,0],
+                ii = [12,0,0,0,0,12,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df12)
+```
+
+```julia
+df12_r = read_pumas(df12, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+```julia
+obs12 = simobs(pomodel, df12_r, par,obstimes=0:1:96)
+plot(obs12, obsnames=[:cp])
+```
+
+13. Scenario-13 - `addl` cannot be zero with a positive `ii`
+
+```julia
+df13 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,0,0,0,0,10,0,0,0,0],
+                addl = [0,0,0,0,0,0,0,0,0,0],
+                ii = [12,0,0,0,0,12,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df13)
+```
+
+```julia
+df13_r = read_pumas(df13, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this example `addl` is allowed to zero when `ii` is positive. This is incorrect.
+In contrast, look at the `DosageRegimen` below.
+
+```julia
+ev13 = DosageRegimen(100, ii=12, addl=0)
+```
+14. Scenario-14 - `amt` cannot be zero when `evid=1`
+
+```julia
+df14 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[0,0,0,0,0,0,0,0,0,0],
+                addl = [5,0,0,0,0,5,0,0,0,0],
+                ii = [12,0,0,0,0,12,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[1,0,0,0,0,1,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df14)
+```
+
+```julia
+df14_r = read_pumas(df14, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this example `amt` is allowed to zero when `evid=1`. This is incorrect.
+In contrast, look at the `DosageRegimen` below.
+
+```julia
+ev14 = DosageRegimen(0, ii=12, addl=5)
+```
+
+15. Scenario-15 - `evid` cannot be zero when `amt>0` or `addl` and `ii` are positive
+
+```julia
+df15 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
+                time = [0,1,2,3,4,0,1,2,3,4],
+                amt=[10,0,0,0,0,10,0,0,0,0],
+                addl = [5,0,0,0,0,5,0,0,0,0],
+                ii = [12,0,0,0,0,12,0,0,0,0],
+                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
+                evid=[0,0,0,0,0,0,0,0,0,0],
+                dv=[missing,8,6,4,2,missing,8,6,4,2],
+                age=[45,45,45,45,45,50,50,50,50,50],
+                sex = ["M","M","M","M","M","F","F","F","F","F"],
+                crcl =[90,78,75,72,70,110,110,110,110,110])
+display(df15)
+```
+
+```julia
+df15_r = read_pumas(df15, amt=:amt, cvs=[:age,:sex,:crcl])
+```
+
+In this example `evid` is allowed to zero when `amt=0`. This is incorrect.
+In contrast, look at the `DosageRegimen` below.
+
+```julia
+ev15 = DosageRegimen(10, evid=0, ii=12, addl=5)
+```
