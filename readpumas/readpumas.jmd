@@ -87,7 +87,7 @@ df2 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
                 amt=[10,0,0,0,0,10,0,0,0,0],
                 cmt=[1,2,2,2,2,1,2,2,2,2],
                 evid=[1,0,0,0,0,1,0,0,0,0],
-                dv=[10,8,6,4,2,10,8,6,4,2],
+                obs=[10,8,6,4,2,10,8,6,4,2],
                 age=[45,45,45,45,45,50,50,50,50,50],
                 sex = ["M","M","M","M","M","F","F","F","F","F"],
                 crcl =[90,85,75,72,70,110,110,110,110,110])
@@ -95,7 +95,7 @@ display(df2)
 ```
 
 ```julia
-df2_r = read_pumas(df2, cvs=[:age,:sex,:crcl])
+df2_r = read_pumas(df2, dvs=[:obs],cvs=[:age,:sex,:crcl])
 ```
 
 In this case, the observations at the time of dosing events are being set to `missing`. We can see this here
@@ -212,7 +212,7 @@ We should throw an assertion error saying that __`cmt` should be >0__
 ```julia
 df7 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
                 time = [0,1,2,3,4,0,1,2,3,4],
-                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                amt=[10,0,0,0,0,10,0,0,0,0],
                 cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
                 evid=[1,0,0,0,0,1,0,0,0,0],
                 dv=[missing,8,6,4,2,missing,8,6,4,2],
@@ -258,7 +258,7 @@ __xxx has/have been provided as a string column(s) where Pumas requires this/the
 ```julia
 df9 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
                 time = [0,1,2,3,4,0,1,2,3,4],
-                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                amt=[10,0,0,0,0,10,0,0,0,0],
                 cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
                 evid=[1,0,0,0,0,1,0,0,0,0],
                 dv=[missing,8,6,4,2,missing,8,6,4,2],
@@ -284,7 +284,7 @@ TODO: Not sure what else to tell the user
 ```julia
 df10 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
                 time = [0,1,2,3,4,0,1,2,3,4],
-                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                amt=[10,0,0,0,0,10,0,0,0,0],
                 addl = [5,0,0,0,0,5,0,0,0,0],
                 cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
                 evid=[1,0,0,0,0,1,0,0,0,0],
@@ -320,7 +320,7 @@ ev10 = DosageRegimen(100, addl=5)
 ```julia
 df11 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
                 time = [0,1,2,3,4,0,1,2,3,4],
-                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                amt=[10,0,0,0,0,10,0,0,0,0],
                 addl = [5,0,0,0,0,5,0,0,0,0],
                 ii = [0,0,0,0,0,0,0,0,0,0],
                 cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
@@ -357,7 +357,7 @@ ev11 = DosageRegimen(100, addl=5, ii=0)
 ```julia
 df12 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
                 time = [0,1,2,3,4,0,1,2,3,4],
-                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                amt=[10,0,0,0,0,10,0,0,0,0],
                 addl = [5,0,0,0,0,5,0,0,0,0],
                 ii = [12,0,0,0,0,12,0,0,0,0],
                 cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
@@ -383,7 +383,7 @@ plot(obs12, obsnames=[:cp])
 ```julia
 df13 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
                 time = [0,1,2,3,4,0,1,2,3,4],
-                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                amt=[10,0,0,0,0,10,0,0,0,0],
                 addl = [0,0,0,0,0,0,0,0,0,0],
                 ii = [12,0,0,0,0,12,0,0,0,0],
                 cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
@@ -410,7 +410,7 @@ ev13 = DosageRegimen(100, ii=12, addl=0)
 ```julia
 df14 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
                 time = [0,1,2,3,4,0,1,2,3,4],
-                amt=[0,missing,missing,missing,missing,0,missing,missing,missing,missing],
+                amt=[0,0,0,0,0,0,0,0,0,0],
                 addl = [5,0,0,0,0,5,0,0,0,0],
                 ii = [12,0,0,0,0,12,0,0,0,0],
                 cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
@@ -438,7 +438,7 @@ ev14 = DosageRegimen(0, ii=12, addl=5)
 ```julia
 df15 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
                 time = [0,1,2,3,4,0,1,2,3,4],
-                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
+                amt=[10,0,0,0,0,10,0,0,0,0],
                 addl = [5,0,0,0,0,5,0,0,0,0],
                 ii = [12,0,0,0,0,12,0,0,0,0],
                 cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
@@ -459,32 +459,4 @@ In contrast, look at the `DosageRegimen` below.
 
 ```julia
 ev15 = DosageRegimen(10, evid=0, ii=12, addl=5)
-```
-
-16. Scenario-16 - `evid` cannot be zero when `amt>0` or `addl` and `ii` are positive
-
-```julia
-df16 = DataFrame(id = [1,1,1,1,1,2,2,2,2,2],
-                time = [0,1,2,3,4,0,1,2,3,4],
-                amt=[10,missing,missing,missing,missing,10,missing,missing,missing,missing],
-                addl = [5,0,0,0,0,5,0,0,0,0],
-                ii = [12,0,0,0,0,12,0,0,0,0],
-                cmt=["Depot","Central","Central","Central","Central","Depot","Central","Central","Central","Central"],
-                evid=[1,0,0,0,0,1,0,0,0,0],
-                dv=[missing,8,6,4,2,missing,8,6,4,2],
-                age=[45,45,45,45,45,50,50,50,50,50],
-                sex = ["M","M","M","M","M","F","F","F","F","F"],
-                crcl =[90,78,75,72,70,110,110,110,110,110])
-display(df16)
-```
-
-```julia
-df16_r = read_pumas(df16, amt=:amt, cvs=[:age,:sex,:crcl])
-```
-
-In this example `evid` is allowed to zero when `amt=0`. This is incorrect.
-In contrast, look at the `DosageRegimen` below.
-
-```julia
-ev16 = DosageRegimen(10, evid=0, ii=12, addl=5)
 ```
